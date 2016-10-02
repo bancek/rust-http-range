@@ -1,0 +1,8 @@
+[package]
+name = "http-range"
+version = "0.1.0"
+authors = ["Luka Zakrajšek <luka@bancek.net>"]
+repository = "https://github.com/bancek/rust-http-range.git"
+description = "HTTP Range header parser"
+readme = "README.md"
+license = "MIT"
