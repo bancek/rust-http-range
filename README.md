@@ -8,7 +8,7 @@ Inspired by Go's net/http library.
 
 Example usage:
 
-```
+```rust
 extern crate http_range;
 
 use http_range::{HttpRange, HttpRangeParseError}
