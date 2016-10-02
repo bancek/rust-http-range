@@ -17,6 +17,7 @@ let mut ranges = match HttpRange::parse(range_str, size) {
     Ok(r) => println!("Start {}, length {}", r.start, r.length),
     Err(err) => println!("HttpRange parse error: {:?}", err)
 };
+```
 
 ## Used in
 
