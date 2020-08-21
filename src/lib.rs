@@ -3,7 +3,7 @@
 //! HTTP Range header parser.
 //! Inspired by Go's net/http library.
 
-static PREFIX: &'static str = "bytes=";
+static PREFIX: &'static [u8] = b"bytes=";
 const PREFIX_LEN: usize = 6;
 
 /// Range parsing error
@@ -30,6 +30,10 @@ impl HttpRange {
     /// `header` is HTTP Range header (e.g. `bytes=bytes=0-9`).
     /// `size` is full size of response (file).
     pub fn parse(header: &str, size: u64) -> Result<Vec<HttpRange>, HttpRangeParseError> {
+        Self::parse_bytes(header.as_bytes(), size)
+    }
+
+    pub fn parse_bytes(header: &[u8], size: u64) -> Result<Vec<HttpRange>, HttpRangeParseError> {
         if header.is_empty() {
             return Ok(Vec::new());
         }
@@ -38,88 +42,136 @@ impl HttpRange {
             return Err(HttpRangeParseError::InvalidRange);
         }
 
-        let size_sig = size as i64;
-
         let mut no_overlap = false;
 
-        let all_ranges: Vec<Option<HttpRange>> = header[PREFIX_LEN..]
-            .split(',')
-            .map(|x| x.trim())
-            .filter(|x| !x.is_empty())
-            .map(|ra| {
-                let mut start_end_iter = ra.split('-');
-
-                let start_str = start_end_iter
-                    .next()
-                    .ok_or(HttpRangeParseError::InvalidRange)?
-                    .trim();
-                let end_str = start_end_iter
-                    .next()
-                    .ok_or(HttpRangeParseError::InvalidRange)?
-                    .trim();
-
-                if start_str.is_empty() {
-                    // If no start is specified, end specifies the
-                    // range start relative to the end of the file.
-                    let mut length: i64 = end_str
-                        .parse()
-                        .map_err(|_| HttpRangeParseError::InvalidRange)?;
-
-                    if length > size_sig {
-                        length = size_sig;
-                    }
-
-                    Ok(Some(HttpRange {
-                        start: (size_sig - length) as u64,
-                        length: length as u64,
-                    }))
-                } else {
-                    let start: i64 = start_str
-                        .parse()
-                        .map_err(|_| HttpRangeParseError::InvalidRange)?;
-
-                    if start < 0 {
-                        return Err(HttpRangeParseError::InvalidRange);
-                    }
-                    if start >= size_sig {
+        let ranges: Vec<HttpRange> = header[PREFIX_LEN..]
+            .split(|b| *b == b',')
+            .filter_map(|ra| {
+                let ra = ra.trim();
+                if ra.is_empty() {
+                    return None;
+                }
+                match Self::parse_single_range(ra, size) {
+                    Ok(Some(range)) => Some(Ok(range)),
+                    Ok(None) => {
                         no_overlap = true;
-                        return Ok(None);
+                        None
                     }
-
-                    let length = if end_str.is_empty() {
-                        // If no end is specified, range extends to end of the file.
-                        size_sig - start
-                    } else {
-                        let mut end: i64 = end_str
-                            .parse()
-                            .map_err(|_| HttpRangeParseError::InvalidRange)?;
-
-                        if start > end {
-                            return Err(HttpRangeParseError::InvalidRange);
-                        }
-
-                        if end >= size_sig {
-                            end = size_sig - 1;
-                        }
-
-                        end - start + 1
-                    };
-
-                    Ok(Some(HttpRange {
-                        start: start as u64,
-                        length: length as u64,
-                    }))
+                    Err(e) => Some(Err(e)),
                 }
             })
             .collect::<Result<_, _>>()?;
-
-        let ranges: Vec<HttpRange> = all_ranges.into_iter().filter_map(|x| x).collect();
 
         if no_overlap && ranges.is_empty() {
             return Err(HttpRangeParseError::NoOverlap);
         }
 
         Ok(ranges)
+    }
+
+    fn parse_single_range(
+        bytes: &[u8],
+        size: u64,
+    ) -> Result<Option<HttpRange>, HttpRangeParseError> {
+        let mut start_end_iter = bytes.split(|b| *b == b'-');
+
+        let start_str = start_end_iter
+            .next()
+            .ok_or(HttpRangeParseError::InvalidRange)?
+            .trim();
+        let end_str = start_end_iter
+            .next()
+            .ok_or(HttpRangeParseError::InvalidRange)?
+            .trim();
+
+        if start_str.is_empty() {
+            // If no start is specified, end specifies the
+            // range start relative to the end of the file.
+            let mut length: u64 = end_str
+                .parse_u64()
+                .map_err(|_| HttpRangeParseError::InvalidRange)?;
+
+            if length > size {
+                length = size;
+            }
+
+            Ok(Some(HttpRange {
+                start: (size - length),
+                length,
+            }))
+        } else {
+            let start: u64 = start_str
+                .parse_u64()
+                .map_err(|_| HttpRangeParseError::InvalidRange)?;
+
+            if start >= size {
+                return Ok(None);
+            }
+
+            let length = if end_str.is_empty() {
+                // If no end is specified, range extends to end of the file.
+                size - start
+            } else {
+                let mut end: u64 = end_str
+                    .parse_u64()
+                    .map_err(|_| HttpRangeParseError::InvalidRange)?;
+
+                if start > end {
+                    return Err(HttpRangeParseError::InvalidRange);
+                }
+
+                if end >= size {
+                    end = size - 1;
+                }
+
+                end - start + 1
+            };
+
+            Ok(Some(HttpRange { start, length }))
+        }
+    }
+}
+
+trait SliceExt {
+    fn trim(&self) -> &Self;
+    fn parse_u64(&self) -> Result<u64, ()>;
+}
+
+impl SliceExt for [u8] {
+    fn trim(&self) -> &[u8] {
+        fn is_whitespace(c: &u8) -> bool {
+            *c == b'\t' || *c == b' '
+        }
+
+        fn is_not_whitespace(c: &u8) -> bool {
+            !is_whitespace(c)
+        }
+
+        if let Some(first) = self.iter().position(is_not_whitespace) {
+            if let Some(last) = self.iter().rposition(is_not_whitespace) {
+                &self[first..last + 1]
+            } else {
+                unreachable!();
+            }
+        } else {
+            &[]
+        }
+    }
+
+    fn parse_u64(&self) -> Result<u64, ()> {
+        if self.is_empty() {
+            return Err(());
+        }
+        let mut res = 0u64;
+        for b in self {
+            if *b >= 0x30 && *b <= 0x39 {
+                res = res * 10 + (b - 0x30) as u64;
+            } else {
+                return Err(());
+            }
+        }
+
+        Ok(res)
     }
 }
 
