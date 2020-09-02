@@ -91,6 +91,10 @@ impl HttpRange {
                 .parse_u64()
                 .map_err(|_| HttpRangeParseError::InvalidRange)?;
 
+            if length == 0 {
+                return Ok(None);
+            }
+
             if length > size {
                 length = size;
             }
@@ -396,6 +400,95 @@ mod tests {
                     HttpRange {
                         start: 7,
                         length: 2,
+                    },
+                ],
+            ),
+            T(
+                "bytes=50-60,2-3",
+                10,
+                vec![
+                    HttpRange {
+                        start: 2,
+                        length: 2,
+                    },
+                ],
+            ),
+            T(
+                "bytes=50-60,-5",
+                10,
+                vec![
+                    HttpRange {
+                        start: 5,
+                        length: 5,
+                    },
+                ],
+            ),
+            T(
+                "bytes=50-60,7-",
+                10,
+                vec![
+                    HttpRange {
+                        start: 7,
+                        length: 3,
+                    },
+                ],
+            ),
+            T(
+                "bytes=50-60,20-",
+                10,
+                vec![],
+            ),
+            T(
+                "bytes=50-60,20-,3-4",
+                10,
+                vec![
+                    HttpRange {
+                        start: 3,
+                        length: 2,
+                    },
+                ],
+            ),
+            T(
+                "bytes=9-20,-5",
+                10,
+                vec![
+                    HttpRange {
+                        start: 9,
+                        length: 1,
+                    },
+                    HttpRange {
+                        start: 5,
+                        length: 5,
+                    },
+                ],
+            ),
+            T(
+                "bytes=15-20,-0",
+                10,
+                vec![],
+            ),
+            T(
+                "bytes=15-20,-0",
+                20,
+                vec![
+                    HttpRange {
+                        start: 15,
+                        length: 5,
+                    },
+                ],
+            ),
+            T("bytes=1-2,bytes=3-4", 10, vec![]),
+            T("bytes=1-2,blergh=3-4", 10, vec![]),
+            T("blergh=1-2,bytes=3-4", 10, vec![]),
+            T("bytes=-0", 0, vec![]),
+            T("bytes=-0", 5, vec![]),
+            T(
+                "bytes=-1",
+                0,
+                vec![
+                    HttpRange {
+                        start: 0,
+                        length: 0,
                     },
                 ],
             ),
