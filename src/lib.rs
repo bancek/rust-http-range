@@ -73,7 +73,7 @@ impl HttpRange {
         bytes: &[u8],
         size: u64,
     ) -> Result<Option<HttpRange>, HttpRangeParseError> {
-        let mut start_end_iter = bytes.split(|b| *b == b'-');
+        let mut start_end_iter = bytes.splitn(2, |b| *b == b'-');
 
         let start_str = start_end_iter
             .next()
@@ -86,7 +86,14 @@ impl HttpRange {
 
         if start_str.is_empty() {
             // If no start is specified, end specifies the
-            // range start relative to the end of the file.
+            // range start relative to the end of the file,
+            // and we are dealing with <suffix-length>
+            // which has to be a non-negative integer as per
+            // RFC 7233 Section 2.1 "Byte-Ranges".
+            if end_str.is_empty() || end_str[0] == b'-' {
+                return Err(HttpRangeParseError::InvalidRange);
+            }
+
             let mut length: u64 = end_str
                 .parse_u64()
                 .map_err(|_| HttpRangeParseError::InvalidRange)?;
@@ -192,10 +199,32 @@ mod tests {
             T("", 1000, vec![]),
             T("foo", 0, vec![]),
             T("bytes=", 0, vec![]),
+            T("bytes=", 200, vec![]),
             T("bytes=7", 10, vec![]),
             T("bytes= 7 ", 10, vec![]),
             T("bytes=1-", 0, vec![]),
             T("bytes=5-4", 10, vec![]),
+            T("bytes=--6", 200, vec![]),
+            T("bytes=--0", 200, vec![]),
+            T("bytes=---0", 200, vec![]),
+            T(
+                "bytes=-6",
+                200,
+                vec![HttpRange {
+                    start: 194,
+                    length: 6,
+                }],
+            ),
+            T(
+                "bytes=6-",
+                200,
+                vec![HttpRange {
+                    start: 6,
+                    length: 194,
+                }],
+            ),
+            T("bytes=-6-", 0, vec![]),
+            T("bytes=-0", 200, vec![]),
             T("bytes=0-2,5-4", 10, vec![]),
             T("bytes=2-5,4-3", 10, vec![]),
             T("bytes=--5,4--3", 10, vec![]),
@@ -406,47 +435,35 @@ mod tests {
             T(
                 "bytes=50-60,2-3",
                 10,
-                vec![
-                    HttpRange {
-                        start: 2,
-                        length: 2,
-                    },
-                ],
+                vec![HttpRange {
+                    start: 2,
+                    length: 2,
+                }],
             ),
             T(
                 "bytes=50-60,-5",
                 10,
-                vec![
-                    HttpRange {
-                        start: 5,
-                        length: 5,
-                    },
-                ],
+                vec![HttpRange {
+                    start: 5,
+                    length: 5,
+                }],
             ),
             T(
                 "bytes=50-60,7-",
                 10,
-                vec![
-                    HttpRange {
-                        start: 7,
-                        length: 3,
-                    },
-                ],
+                vec![HttpRange {
+                    start: 7,
+                    length: 3,
+                }],
             ),
-            T(
-                "bytes=50-60,20-",
-                10,
-                vec![],
-            ),
+            T("bytes=50-60,20-", 10, vec![]),
             T(
                 "bytes=50-60,20-,3-4",
                 10,
-                vec![
-                    HttpRange {
-                        start: 3,
-                        length: 2,
-                    },
-                ],
+                vec![HttpRange {
+                    start: 3,
+                    length: 2,
+                }],
             ),
             T(
                 "bytes=9-20,-5",
@@ -462,20 +479,14 @@ mod tests {
                     },
                 ],
             ),
-            T(
-                "bytes=15-20,-0",
-                10,
-                vec![],
-            ),
+            T("bytes=15-20,-0", 10, vec![]),
             T(
                 "bytes=15-20,-0",
                 20,
-                vec![
-                    HttpRange {
-                        start: 15,
-                        length: 5,
-                    },
-                ],
+                vec![HttpRange {
+                    start: 15,
+                    length: 5,
+                }],
             ),
             T("bytes=1-2,bytes=3-4", 10, vec![]),
             T("bytes=1-2,blergh=3-4", 10, vec![]),
@@ -485,12 +496,10 @@ mod tests {
             T(
                 "bytes=-1",
                 0,
-                vec![
-                    HttpRange {
-                        start: 0,
-                        length: 0,
-                    },
-                ],
+                vec![HttpRange {
+                    start: 0,
+                    length: 0,
+                }],
             ),
         ];
 
