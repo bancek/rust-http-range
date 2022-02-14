@@ -14,7 +14,9 @@ extern crate http_range;
 use http_range::{HttpRange, HttpRangeParseError}
 
 let mut ranges = match HttpRange::parse(range_str, size) {
-    Ok(r) => println!("Start {}, length {}", r.start, r.length),
+    Ok(rngs) => for r in rngs {
+        println!("Start {}, length {}", r.start, r.length)
+    },
     Err(err) => println!("HttpRange parse error: {:?}", err)
 };
 ```
