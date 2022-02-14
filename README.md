@@ -11,14 +11,19 @@ Example usage:
 ```rust
 extern crate http_range;
 
-use http_range::{HttpRange, HttpRangeParseError}
+use http_range::{HttpRange};
 
-let mut ranges = match HttpRange::parse(range_str, size) {
-    Ok(rngs) => for r in rngs {
-        println!("Start {}, length {}", r.start, r.length)
-    },
-    Err(err) => println!("HttpRange parse error: {:?}", err)
-};
+fn main() {
+    let range_str = "bytes=0-8";
+    let size = 10;
+
+    match HttpRange::parse(range_str, size) {
+        Ok(rngs) => for r in rngs {
+            println!("Start {}, length {}", r.start, r.length)
+        },
+        Err(err) => println!("HttpRange parse error: {:?}", err)
+    };
+}
 ```
 
 ## Used in
