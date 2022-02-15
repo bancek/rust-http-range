@@ -175,8 +175,12 @@ impl SliceExt for [u8] {
         }
         let mut res = 0u64;
         for b in self {
-            if *b >= 0x30 && *b <= 0x39 {
-                res = res * 10 + (b - 0x30) as u64;
+            if *b >= b'0' && *b <= b'9' {
+                res = res
+                    .checked_mul(10)
+                    .ok_or(())?
+                    .checked_add((b - b'0') as u64)
+                    .ok_or(())?;
             } else {
                 return Err(());
             }
@@ -500,6 +504,11 @@ mod tests {
                     start: 0,
                     length: 0,
                 }],
+            ),
+            T(
+                "bytes=0-99999999999999999999999999999999999999999999",
+                10,
+                vec![],
             ),
         ];
 
