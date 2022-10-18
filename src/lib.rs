@@ -128,7 +128,7 @@ impl HttpRange {
                     .map_err(|_| HttpRangeParseError::InvalidRange)?;
 
                 if start > end {
-                    return Err(HttpRangeParseError::InvalidRange);
+                    return Ok(None);
                 }
 
                 if end >= size {
@@ -207,6 +207,7 @@ mod tests {
             T("bytes=7", 10, vec![]),
             T("bytes= 7 ", 10, vec![]),
             T("bytes=1-", 0, vec![]),
+            T("bytes=100-10", 0, vec![]),
             T("bytes=5-4", 10, vec![]),
             T("bytes=--6", 200, vec![]),
             T("bytes=--0", 200, vec![]),
