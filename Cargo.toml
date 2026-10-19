@@ -1,7 +1,7 @@
 [package]
 edition = "2018"
 name = "http-range"
-version = "0.1.5"
+version = "0.1.6"
 authors = ["Luka Zakrajšek <luka@bancek.net>"]
 repository = "https://github.com/bancek/rust-http-range.git"
 documentation = "https://docs.rs/http-range/0.1.5/http_range/"
