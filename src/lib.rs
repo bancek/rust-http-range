@@ -3,8 +3,21 @@
 //! HTTP Range header parser.
 //! Inspired by Go's net/http library.
 
-static PREFIX: &'static [u8] = b"bytes=";
 const PREFIX_LEN: usize = 6;
+
+fn has_bytes_unit(header: &[u8]) -> bool {
+    if header.len() < PREFIX_LEN {
+        return false;
+    }
+
+    let unit = &header[..PREFIX_LEN];
+    ((unit[0] | 0x20) == b'b')
+        & ((unit[1] | 0x20) == b'y')
+        & ((unit[2] | 0x20) == b't')
+        & ((unit[3] | 0x20) == b'e')
+        & ((unit[4] | 0x20) == b's')
+        & (unit[5] == b'=')
+}
 
 /// Range parsing error
 #[derive(Debug)]
@@ -38,7 +51,7 @@ impl HttpRange {
             return Ok(Vec::new());
         }
 
-        if !header.starts_with(PREFIX) {
+        if !has_bytes_unit(header) {
             return Err(HttpRangeParseError::InvalidRange);
         }
 
@@ -509,6 +522,30 @@ mod tests {
                 "bytes=0-99999999999999999999999999999999999999999999",
                 10,
                 vec![],
+            ),
+            T(
+                "Bytes=2-4",
+                10,
+                vec![HttpRange {
+                    start: 2,
+                    length: 3,
+                }],
+            ),
+            T(
+                "BYTES=2-4",
+                10,
+                vec![HttpRange {
+                    start: 2,
+                    length: 3,
+                }],
+            ),
+            T(
+                "bYtEs=2-4",
+                10,
+                vec![HttpRange {
+                    start: 2,
+                    length: 3,
+                }],
             ),
         ];
 
