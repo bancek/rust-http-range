@@ -28,6 +28,7 @@ fn main() {
 
 ## Used in
 
+- [actix-files](https://crates.io/crates/actix-files)
 - [iron-send-file](https://github.com/bancek/iron-send-file)
 
 ## Author
